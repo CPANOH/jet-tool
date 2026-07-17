@@ -291,6 +291,72 @@ const INDUSTRIES = {
     ],
     filler:{dr:"지급수수료",cr:"미지급금"},
   },
+
+  pharma:{
+    label:"제약·바이오",
+    risk:"제약·바이오는 <b>R&D 자산화(개발비)</b> 판단과 <b>기술수출 마일스톤·기술료 수익인식 시점</b>이 핵심입니다. 아직 자산인식 요건을 못 갖춘 R&D를 개발비로 과대 자산화하거나, 마일스톤 미달성분을 조기에 기술료수익으로 인식하는 것이 대표 위험입니다.",
+    accounts:{현금:"자산",매출채권:"자산",제품:"자산",원재료:"자산",개발비:"자산",기계장치:"자산",
+      미지급금:"부채",계약부채:"부채",제품매출:"수익",기술료수익:"수익",매출원가:"비용",연구개발비:"비용",지급수수료:"비용",감가상각비:"비용"},
+    txns:[
+      {key:"sale",label:"의약품 매출",dr:"매출채권",cr:"제품매출",auto:true,base:[30000000,300000000],desc:"의약품 매출"},
+      {key:"cogs",label:"매출원가 인식",dr:"매출원가",cr:"제품",auto:true,base:[20000000,200000000],desc:"매출원가 인식"},
+      {key:"rnd",label:"연구개발비 지출",dr:"연구개발비",cr:"현금",auto:false,base:[20000000,200000000],desc:"임상·연구 지출"},
+      {key:"dev",label:"개발비 자산화(요건 충족분)",dr:"개발비",cr:"현금",auto:false,base:[50000000,300000000],desc:"임상3상 개발비 인식"},
+      {key:"upfront",label:"기술수출 계약금 수령",dr:"현금",cr:"계약부채",auto:false,base:[100000000,600000000],desc:"기술수출 선수금"},
+      {key:"milestone",label:"마일스톤 기술료 수익",dr:"계약부채",cr:"기술료수익",auto:false,base:[50000000,400000000],desc:"마일스톤 달성 기술료"},
+      {key:"material",label:"원재료(원료의약품) 매입",dr:"원재료",cr:"미지급금",auto:true,base:[20000000,150000000],desc:"원료 매입"},
+    ],
+    planted:[
+      {postDate:"2026-06-30",dt:new Date(2026,5,30,23,15),preparer:"정CFO",approver:"정CFO",type:"수동",dr:"개발비",cr:"연구개발비",amount:350000000,desc:"연구개발비 개발비로 자본화"},
+      {postDate:"2026-06-28",dt:new Date(2026,5,28,23,30),preparer:"박부장",approver:"정CFO",type:"수동",dr:"계약부채",cr:"기술료수익",amount:500000000,desc:"마일스톤 기술료 조기 인식"},
+      {postDate:"2026-05-15",dt:new Date(2026,5,10,16,0),preparer:"박부장",approver:"박부장",type:"수동",dr:"개발비",cr:"현금",amount:200000000,desc:"개발비 소급 계상"},
+    ],
+    filler:{dr:"지급수수료",cr:"미지급금"},
+  },
+
+  retail:{
+    label:"유통·소매",
+    risk:"유통·소매는 <b>재고자산 평가(진부화)</b>와 <b>반품충당부채</b> 추정, 그리고 <b>기말 매출 밀어내기(채널 스터핑)</b>가 핵심 위험입니다. 반품충당·재고평가손실을 과소·환입하거나, 기말에 매출을 조기 인식해 실적을 부풀리는 것이 대표적입니다.",
+    accounts:{현금:"자산",매출채권:"자산",상품:"자산",재고자산평가충당금:"자산",
+      매입채무:"부채",미지급금:"부채",선수금:"부채",반품충당부채:"부채",
+      상품매출:"수익",매출원가:"비용",반품비:"비용",지급임차료:"비용",지급수수료:"비용",재고자산평가손실:"비용"},
+    txns:[
+      {key:"purchase",label:"상품 매입",dr:"상품",cr:"매입채무",auto:true,base:[20000000,200000000],desc:"상품 매입"},
+      {key:"sale",label:"상품 매출",dr:"매출채권",cr:"상품매출",auto:true,base:[10000000,150000000],desc:"상품 매출"},
+      {key:"cogs",label:"매출원가 인식",dr:"매출원가",cr:"상품",auto:true,base:[8000000,120000000],desc:"매출원가 인식"},
+      {key:"gift",label:"상품권 판매(선수금)",dr:"현금",cr:"선수금",auto:false,base:[5000000,80000000],desc:"상품권 발행"},
+      {key:"rent",label:"매장 임차료",dr:"지급임차료",cr:"현금",auto:false,base:[5000000,50000000],desc:"매장 임차료"},
+      {key:"return",label:"반품충당 설정",dr:"반품비",cr:"반품충당부채",auto:false,base:[3000000,40000000],desc:"반품충당 설정"},
+      {key:"inv",label:"재고 저가법 평가손실",dr:"재고자산평가손실",cr:"재고자산평가충당금",auto:false,base:[5000000,60000000],desc:"진부화 재고 평가손실"},
+    ],
+    planted:[
+      {postDate:"2026-06-30",dt:new Date(2026,5,30,22,40),preparer:"정CFO",approver:"정CFO",type:"수동",dr:"매출채권",cr:"상품매출",amount:400000000,desc:"기말 매출 조기 계상"},
+      {postDate:"2026-06-27",dt:new Date(2026,5,27,23,0),preparer:"박부장",approver:"정CFO",type:"수동",dr:"반품충당부채",cr:"반품비",amount:150000000,desc:"반품충당부채 환입"},
+      {postDate:"2026-06-26",dt:new Date(2026,5,26,20,0),preparer:"박부장",approver:"박부장",type:"수동",dr:"재고자산평가충당금",cr:"재고자산평가손실",amount:120000000,desc:"재고평가충당금 환입"},
+    ],
+    filler:{dr:"지급수수료",cr:"미지급금"},
+  },
+
+  platform:{
+    label:"게임·IT 플랫폼",
+    risk:"게임·플랫폼은 <b>선수수익(미사용 충전금·기간 구독)의 수익인식 시점</b>과 <b>개발 인건비 자산화</b>가 핵심 위험입니다. 아직 미사용된 충전금을 기말에 매출로 당겨 인식하거나, 개발 인건비를 과대 자산화(개발비)하는 것이 대표적입니다.",
+    accounts:{현금:"자산",매출채권:"자산",선급비용:"자산",개발비:"자산",
+      미지급금:"부채",계약부채:"부채",게임매출:"수익",광고수익:"수익",지급수수료:"비용",인건비:"비용",서버비:"비용"},
+    txns:[
+      {key:"charge",label:"유저 충전금 수령(선수)",dr:"현금",cr:"계약부채",auto:true,base:[10000000,120000000],desc:"인앱 충전금 수령"},
+      {key:"revenue",label:"인앱결제 매출 인식",dr:"계약부채",cr:"게임매출",auto:true,base:[10000000,120000000],desc:"아이템 사용분 매출인식"},
+      {key:"ad",label:"광고 수익",dr:"매출채권",cr:"광고수익",auto:true,base:[5000000,80000000],desc:"광고 수익"},
+      {key:"fee",label:"플랫폼 수수료",dr:"지급수수료",cr:"미지급금",auto:true,base:[3000000,40000000],desc:"앱마켓 수수료"},
+      {key:"labor",label:"개발 인건비",dr:"인건비",cr:"현금",auto:false,base:[20000000,150000000],desc:"개발 인건비"},
+      {key:"server",label:"서버·인프라비",dr:"서버비",cr:"현금",auto:false,base:[5000000,60000000],desc:"클라우드 서버비"},
+    ],
+    planted:[
+      {postDate:"2026-06-30",dt:new Date(2026,5,30,23,20),preparer:"정CFO",approver:"정CFO",type:"수동",dr:"계약부채",cr:"게임매출",amount:450000000,desc:"미사용 충전금 매출 인식"},
+      {postDate:"2026-05-20",dt:new Date(2026,5,12,15,0),preparer:"박부장",approver:"박부장",type:"수동",dr:"매출채권",cr:"광고수익",amount:200000000,desc:"광고수익 소급 계상"},
+      {postDate:"2026-06-28",dt:new Date(2026,5,28,21,0),preparer:"박부장",approver:"정CFO",type:"수동",dr:"개발비",cr:"인건비",amount:150000000,desc:"개발 인건비 자본화"},
+    ],
+    filler:{dr:"서버비",cr:"미지급금"},
+  },
 };
 // 전체 계정→유형 병합 맵 (위험 규칙에서 사용)
 const ACC = Object.assign({}, ...Object.values(INDUSTRIES).map(i=>i.accounts));
