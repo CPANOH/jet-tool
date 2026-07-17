@@ -95,12 +95,11 @@
   <section id="t-data">
     <div class="card">
       <h2>분개장 데이터 불러오기</h2>
-      <p class="sub">감사 대상 회사의 <b>산업</b>과 <b>주요 거래</b>를 고르면, 그 산업 특유의 분개 — 그리고 그 산업의 대표적 부정 시나리오 — 가 섞인 가상 분개장이 생성됩니다.</p>
+      <p class="sub">감사 대상 회사의 <b>산업</b>과 <b>주요 거래</b>를 고르면, 그 산업 특유의 분개가 담긴 가상 분개장이 생성됩니다. <b>위험 분개는 몇 건이 숨어 있는지 알 수 없도록 무작위로 섞여</b> 들어갑니다 — 실제 외부감사처럼 직접 위험 분석으로 찾아내야 합니다.</p>
       <div class="cfg">
         <div class="f"><label>산업 카테고리</label><select id="industry" style="min-width:190px"></select></div>
-        <div class="f"><label>정상 전표 수</label><input type="number" id="genNormal" value="180" min="20" max="2000" step="10"></div>
-        <div class="f"><label>위험 전표 수</label><input type="number" id="genRisk" value="6" min="0" max="40"></div>
-        <div class="f"><label>&nbsp;</label><label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink)"><input type="checkbox" id="genRandom" style="width:auto"> 매번 다르게(랜덤)</label></div>
+        <div class="f"><label>분개장 규모(전표 수)</label><input type="number" id="genNormal" value="180" min="20" max="2000" step="10"></div>
+        <div class="f"><label>&nbsp;</label><label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink)"><input type="checkbox" id="genRandom" style="width:auto" checked> 매번 다르게(랜덤)</label></div>
       </div>
       <div class="note" id="indNote" style="margin-bottom:12px;"></div>
       <div style="font-size:11.5px;color:var(--muted);font-weight:700;margin-bottom:6px;">주요 거래 선택 (체크한 거래만 정상 분개로 생성)</div>
@@ -299,7 +298,7 @@ const PREP_NORMAL=["김대리","이과장","최차장"];
 
 /* ============ 데이터 생성 ============ */
 let ENTRIES = [];
-function genSample(industryKey, txnKeys, normalCount, riskCount, randomSeed){
+function genSample(industryKey, txnKeys, normalCount, randomSeed){
   const ind = INDUSTRIES[industryKey] || INDUSTRIES.general;
   const seed = randomSeed ? ((Date.now() ^ (Math.random()*0xffffffff))>>>0) : 20260716;
   const rnd=mulberry32(seed); const out=[];
@@ -320,11 +319,12 @@ function genSample(industryKey, txnKeys, normalCount, riskCount, randomSeed){
     out.push({postDate:fmtDate(d),entryDT:dt,preparer:pick(PREP_NORMAL),approver:"박부장",
       type:t.auto?"자동":"수동",dr:t.dr,cr:t.cr,amount:amt,desc:t.desc});
   }
-  // 위험 전표: 산업 특유 시나리오 우선, 부족하면 승인한도 회피형 filler로 보충
-  const nRisk = Math.max(0, riskCount|0);
-  const chosen = ind.planted.slice(0, nRisk);
-  // 보충 위험전표: 승인한도 직하 + 의심키워드 (평일·업무시간·타인승인으로 완만하게 → 산업 특유 부정이 항상 상위)
-  while(chosen.length < nRisk){
+  // 위험 전표: 외부감사인은 그 건수를 미리 알 수 없음 → 무작위로 은닉 주입
+  // 각 산업 특유 부정 시나리오를 70% 확률로 포함
+  const chosen = ind.planted.filter(()=>rnd()<0.7);
+  // 산업 무관 이상전표(승인한도 직하·의심키워드) 0~3건 무작위 추가
+  const extra = Math.floor(rnd()*4);
+  for(let k=0;k<extra;k++){
     let fd; do{const m=Math.floor(rnd()*6);const day=1+Math.floor(rnd()*27);fd=new Date(2026,m,day);}
     while(fd.getDay()===0||fd.getDay()===6||HOLIDAYS.has(fmtDate(fd)));
     const fdt=new Date(fmtDate(fd)+"T00:00:00"); fdt.setHours(9+Math.floor(rnd()*8),Math.floor(rnd()*60));
@@ -332,6 +332,8 @@ function genSample(industryKey, txnKeys, normalCount, riskCount, randomSeed){
       dr:ind.filler.dr,cr:ind.filler.cr,amount:(9800+Math.floor(rnd()*190))*1000,
       desc:pick(["기타 조정","임시 계상","비용 대체","정산분"])});
   }
+  // 완전 무결 데이터 방지 — 최소 1건은 은닉
+  if(chosen.length===0) chosen.push(ind.planted[Math.floor(rnd()*ind.planted.length)]);
   chosen.forEach(p=>out.push({postDate:p.postDate,entryDT:p.dt,preparer:p.preparer,approver:p.approver,
     type:p.type,dr:p.dr,cr:p.cr,amount:p.amount,desc:p.desc}));
   // 날짜순 정렬 후 전표번호 부여
@@ -522,9 +524,8 @@ document.getElementById("genSample").onclick=()=>{
   const industryKey=document.getElementById("industry").value;
   const txnKeys=[...document.querySelectorAll("#txnBox input:checked")].map(c=>c.value);
   const n=+document.getElementById("genNormal").value||180;
-  const r=+document.getElementById("genRisk").value||0;
   const rand=document.getElementById("genRandom").checked;
-  ENTRIES=genSample(industryKey,txnKeys,n,r,rand); renderData();
+  ENTRIES=genSample(industryKey,txnKeys,n,rand); renderData();
 };
 document.getElementById("downloadCsv").onclick=()=>{
   if(!ENTRIES.length){alert("먼저 분개장을 생성하세요.");return;}
