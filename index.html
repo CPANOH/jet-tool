@@ -72,6 +72,9 @@
   .cfg .f{display:flex;flex-direction:column;gap:4px;}
   .cfg label{font-size:11.5px;color:var(--muted);}
   .txns{display:flex;flex-wrap:wrap;gap:7px 18px;margin-bottom:14px;padding:11px 13px;background:#f7f9fc;border:1px solid var(--line);border-radius:8px;}
+  .tiertbl{width:100%;border-collapse:collapse;font-size:12px;}
+  .tiertbl th,.tiertbl td{border:1px solid var(--line);padding:5px 9px;text-align:left;white-space:nowrap;}
+  .tiertbl th{background:#f0f3f8;color:var(--muted);font-size:11px;}
   .hidden{display:none;}
   .empty{color:var(--muted);text-align:center;padding:30px;}
   code{background:#eef1f6;padding:1px 5px;border-radius:4px;font-size:12px;}
@@ -130,11 +133,12 @@
     <div class="card">
       <h2>위험 스코어링 설정</h2>
       <div class="cfg">
-        <div class="f"><label>승인 한도(원) · 회사 전결규정 입수값</label><input type="number" id="cfgThreshold" value="20000000" step="1000000"></div>
         <div class="f"><label>결산일(기말)</label><input type="date" id="cfgPeriodEnd" value="2026-06-30"></div>
         <div class="f"><label>업무외 시간 시작(시)</label><input type="number" id="cfgNight" value="22" min="18" max="23"></div>
         <div class="f"><button class="b-pri" id="runRisk">위험 분석 실행</button></div>
       </div>
+      <div style="font-size:11.5px;color:var(--muted);font-weight:700;margin:2px 0 6px;">회사 전결규정(승인 권한표) — 데이터 생성 시 회사 규모에서 자동 반영</div>
+      <div id="tierTable" style="max-width:440px;"></div>
       <div class="kpis" id="riskKpis"></div>
     </div>
     <div class="card">
@@ -361,19 +365,36 @@ const INDUSTRIES = {
 const ACC = Object.assign({}, ...Object.values(INDUSTRIES).map(i=>i.accounts));
 const PREP_NORMAL=["김대리","이과장","최차장"];
 
-// 회사 규모 → 승인 한도(회사 전결규정에서 입수하는 값)와 거래 금액 스케일
-// 지원자 입장에선 실제 회사 내부통제를 알 수 없으므로, 규모에 비례한 대표값을 자동 부여
+// 회사 규모 → 전결규정(승인 권한표)과 거래 금액 스케일
+// 승인 한도는 단일 숫자가 아니라 "금액 구간별 결재권자"의 계층(전결표)으로 설정됨
+const RANK_APPROVER = {1:["한팀장"], 2:["박부장"], 3:["정CFO"], 4:["대표이사"]};
+const RANK_TITLE = {1:"팀장", 2:"임원(부장)", 3:"CFO", 4:"대표이사·이사회"};
+function approverRank(name){ for(const r of [4,3,2,1]) if((RANK_APPROVER[r]||[]).includes(name)) return r; return 1; }
+function requiredRank(amount, tiers){ for(const t of tiers){ if(amount<=t.limit) return t.rank; } return tiers[tiers.length-1].rank; }
 const SIZES = {
-  small:{label:"소기업 (매출 수백억)",   threshold:5000000,   scale:0.5},
-  mid:  {label:"중견기업 (매출 수천억)", threshold:20000000,  scale:1},
-  large:{label:"대기업 (매출 조 단위)",  threshold:100000000, scale:3},
+  small:{label:"소기업 (매출 수백억)", scale:0.5, tiers:[
+    {limit:2000000,rank:1},{limit:10000000,rank:2},{limit:50000000,rank:3},{limit:Infinity,rank:4}]},
+  mid:  {label:"중견기업 (매출 수천억)", scale:1, tiers:[
+    {limit:10000000,rank:1},{limit:50000000,rank:2},{limit:200000000,rank:3},{limit:Infinity,rank:4}]},
+  large:{label:"대기업 (매출 조 단위)", scale:3, tiers:[
+    {limit:50000000,rank:1},{limit:300000000,rank:2},{limit:1000000000,rank:3},{limit:Infinity,rank:4}]},
 };
+let CURRENT_SIZE="mid";
+function renderTiers(sizeKey){
+  const tiers=(SIZES[sizeKey]||SIZES.mid).tiers;
+  const rows=tiers.map((t,i)=>{
+    const low=i===0?0:tiers[i-1].limit;
+    const range=isFinite(t.limit)?(won(low)+" ~ "+won(t.limit)):(won(low)+" 초과");
+    return "<tr><td class='num'>"+range+"</td><td>"+RANK_TITLE[t.rank]+"</td></tr>";
+  }).join("");
+  return "<table class='tiertbl'><thead><tr><th>금액 구간(원)</th><th>결재권자</th></tr></thead><tbody>"+rows+"</tbody></table>";
+}
 
 /* ============ 데이터 생성 ============ */
 let ENTRIES = [];
 function genSample(industryKey, txnKeys, normalCount, sizeKey, randomSeed){
   const ind = INDUSTRIES[industryKey] || INDUSTRIES.general;
-  const sz = SIZES[sizeKey] || SIZES.mid; const scale = sz.scale; const threshold = sz.threshold;
+  const sz = SIZES[sizeKey] || SIZES.mid; const scale = sz.scale; const tiers = sz.tiers;
   const seed = randomSeed ? ((Date.now() ^ (Math.random()*0xffffffff))>>>0) : 20260716;
   const rnd=mulberry32(seed); const out=[];
   const pick=a=>a[Math.floor(rnd()*a.length)];
@@ -390,28 +411,32 @@ function genSample(industryKey, txnKeys, normalCount, sizeKey, randomSeed){
     const t=pick(txns);
     let amt=Math.round((t.base[0]+rnd()*(t.base[1]-t.base[0]))*scale/1000)*1000+Math.floor(rnd()*900)+50;
     const dt=bizTime(fmtDate(d));
-    out.push({postDate:fmtDate(d),entryDT:dt,preparer:pick(PREP_NORMAL),approver:"박부장",
+    // 정상 전표: 금액이 요구하는 결재 단계에 맞는 결재권자가 승인 (규정 준수)
+    const appr=pick(RANK_APPROVER[requiredRank(amt,tiers)]);
+    out.push({postDate:fmtDate(d),entryDT:dt,preparer:pick(PREP_NORMAL),approver:appr,
       type:t.auto?"자동":"수동",dr:t.dr,cr:t.cr,amount:amt,desc:t.desc});
   }
   // 위험 전표: 외부감사인은 그 건수를 미리 알 수 없음 → 무작위로 은닉 주입
-  // 각 산업 특유 부정 시나리오를 70% 확률로 포함
-  const chosen = ind.planted.filter(()=>rnd()<0.7);
+  // 각 산업 특유 부정 시나리오를 70% 확률로 포함 (금액은 회사 규모에 맞게 스케일)
+  const scalePlanted = p => Object.assign({}, p, {amount:Math.round(p.amount*scale/1000000)*1000000});
+  const chosen = ind.planted.filter(()=>rnd()<0.7).map(scalePlanted);
   // 산업 무관 이상전표(승인한도 직하·의심키워드) 0~3건 무작위 추가
   const extra = Math.floor(rnd()*4);
   for(let k=0;k<extra;k++){
     let fd; do{const m=Math.floor(rnd()*6);const day=1+Math.floor(rnd()*27);fd=new Date(2026,m,day);}
     while(fd.getDay()===0||fd.getDay()===6||HOLIDAYS.has(fmtDate(fd)));
     const fdt=new Date(fmtDate(fd)+"T00:00:00"); fdt.setHours(9+Math.floor(rnd()*8),Math.floor(rnd()*60));
-    // 승인 한도 바로 아래 금액([0.955,0.99]×한도) — 규모별 한도에 맞춰 생성
-    chosen.push({postDate:fmtDate(fd),dt:fdt,preparer:"박부장",approver:"정CFO",type:"수동",
-      dr:ind.filler.dr,cr:ind.filler.cr,amount:Math.round(threshold*(0.955+rnd()*0.035)/1000)*1000,
+    // 전결 단계 문턱 바로 아래 금액 — 한 단계 위 결재를 피하려는 회피 패턴
+    const finite=tiers.filter(t=>isFinite(t.limit)); const tb=pick(finite);
+    const fAmt=Math.round(tb.limit*(0.955+rnd()*0.035)/1000)*1000;
+    chosen.push({postDate:fmtDate(fd),dt:fdt,preparer:pick(PREP_NORMAL),approver:pick(RANK_APPROVER[tb.rank]),type:"수동",
+      dr:ind.filler.dr,cr:ind.filler.cr,amount:fAmt,
       desc:pick(["기타 조정","임시 계상","비용 대체","정산분"])});
   }
   // 완전 무결 데이터 방지 — 최소 1건은 은닉
-  if(chosen.length===0) chosen.push(ind.planted[Math.floor(rnd()*ind.planted.length)]);
-  // 부정 시나리오 금액도 회사 규모에 비례해 스케일 (백만원 단위 유지 → 라운드 특성 보존)
+  if(chosen.length===0) chosen.push(scalePlanted(ind.planted[Math.floor(rnd()*ind.planted.length)]));
   chosen.forEach(p=>out.push({postDate:p.postDate,entryDT:p.dt,preparer:p.preparer,approver:p.approver,
-    type:p.type,dr:p.dr,cr:p.cr,amount:Math.round(p.amount*scale/1000000)*1000000,desc:p.desc}));
+    type:p.type,dr:p.dr,cr:p.cr,amount:p.amount,desc:p.desc}));
   // 날짜순 정렬 후 전표번호 부여
   out.sort((a,b)=>a.entryDT-b.entryDT);
   out.forEach((e,i)=>e.id="JE"+String(i+1).padStart(4,"0"));
@@ -449,6 +474,7 @@ const RULES=[
   {id:"BLANK",label:"적요 공란",w:2,desc:"거래 설명이 없음. 목적 불명확 — 부적절 분개의 대표적 징후."},
   {id:"KEYWORD",label:"의심 키워드 적요",w:1,desc:"'조정·환입·자본화·대체' 등 모호한 표현. 근거 불충분한 수정분개 가능성."},
   {id:"SELFAPP",label:"작성자=승인자",w:3,desc:"입력자와 승인자가 동일. 직무분리 미비, 자기승인(self-approval) 위험."},
+  {id:"UNDERAPPROVED",label:"결재권한 미달(전결 위반)",w:3,desc:"거래 금액이 요구하는 결재 단계보다 낮은 직급이 승인. 전결규정 위반·승인 권한 우회 위험."},
   {id:"MANUAL_BIG",label:"수동·거액 전표",w:2,desc:"시스템 자동생성이 아닌 수동 입력이면서 상위 금액. 경영진 개입 여지."},
   {id:"UNUSUAL",label:"비경상 계정 조합",w:2,desc:"수익을 차변에, 비용을 대변에(환입) 등 통상과 반대 방향. 취소·조정 위장 위험."},
   {id:"RARE",label:"드문 계정 사용",w:1,desc:"거의 쓰이지 않는 계정. 우회 처리를 위한 임시 계정 사용 가능성."},
@@ -462,7 +488,7 @@ window.setComment=function(id,field,val){(COMMENTS[id]=COMMENTS[id]||{})[field]=
 
 function runRisk(){
   if(!ENTRIES.length){alert("먼저 데이터를 생성/불러오세요.");return;}
-  const threshold=+document.getElementById("cfgThreshold").value||10000000;
+  const tiers=(SIZES[CURRENT_SIZE]||SIZES.mid).tiers;
   const periodEnd=new Date(document.getElementById("cfgPeriodEnd").value+"T00:00:00");
   const nightStart=+document.getElementById("cfgNight").value||22;
   const freq={}; ENTRIES.forEach(e=>{freq[e.dr]=(freq[e.dr]||0)+1;freq[e.cr]=(freq[e.cr]||0)+1;});
@@ -480,10 +506,11 @@ function runRisk(){
     const daysToEnd=(periodEnd-post)/86400000;
     if(daysToEnd>=0&&daysToEnd<=3&&e.type==="수동") fired.push("PERIODEND");
     if(e.amount>=1000000 && e.amount%1000000===0) fired.push("ROUND");
-    if(e.amount>=threshold*0.95 && e.amount<threshold) fired.push("BELOW");
+    if(tiers.some(t=>isFinite(t.limit)&&e.amount>=t.limit*0.95&&e.amount<t.limit)) fired.push("BELOW");
     if(!e.desc||!e.desc.trim()) fired.push("BLANK");
     else if(SUS_WORDS.some(w=>e.desc.includes(w))) fired.push("KEYWORD");
     if(e.preparer===e.approver) fired.push("SELFAPP");
+    if(approverRank(e.approver) < requiredRank(e.amount,tiers)) fired.push("UNDERAPPROVED");
     if(e.type==="수동" && e.amount>=bigCut) fired.push("MANUAL_BIG");
     if(ACC[e.dr]==="수익" || ACC[e.cr]==="비용") fired.push("UNUSUAL");
     if(freq[e.dr]<=3 || freq[e.cr]<=3) fired.push("RARE");
@@ -514,13 +541,14 @@ function interpret(r){
   if(has("SELFAPP")&&has("PERIODEND")||has("SELFAPP")&&has("OFFHOURS"))
     parts.push("입력자와 승인자가 동일하고 정상 업무시간·결재선을 벗어나 처리되어, <b>경영진의 내부통제 무력화(ISA 240)</b> 징후가 강합니다.");
   if(has("BACKDATE")) parts.push("회계일자보다 뒤에 소급 입력되어 <b>기간귀속(cut-off) 및 이익조정 위험</b>이 있습니다. 원거래 증빙의 실제 발생일을 대사해야 합니다.");
-  if(has("BELOW")) parts.push("금액이 승인 한도 바로 아래에 설정되어 <b>승인 회피 목적의 분할 처리</b> 가능성이 있습니다.");
+  if(has("BELOW")) parts.push("금액이 전결 단계 문턱 바로 아래에 설정되어 <b>상위자 승인 회피(분할 처리)</b> 가능성이 있습니다.");
+  if(has("UNDERAPPROVED")) parts.push("거래 금액이 요구하는 <b>전결 단계보다 낮은 직급이 승인</b>해, 전결규정 위반·승인 권한 우회 소지가 있습니다.");
   if(has("UNUSUAL")) parts.push("수익/비용 계정이 통상과 반대 방향(수익 차변·비용 대변 환입 등)으로 사용되어 <b>수익 과대·비용 축소를 위장</b>했을 여지가 있습니다.");
   if(has("ROUND")&&has("MANUAL_BIG")) parts.push("실거래가 아닌 <b>추정·조정성 거액 수동분개</b>로 보이므로 산출 근거를 문의해야 합니다.");
   if(has("BLANK")) parts.push("적요가 공란이라 <b>거래 목적이 불명확</b>합니다. 담당자 문의 및 승인 문서 확인이 필요합니다.");
   if(!parts.length) parts.push("단일 위험 특성이 식별되었습니다. 표본 검토 대상에 포함하여 증빙과 대사합니다.");
   const proc=[];
-  if(has("SELFAPP")) proc.push("결재 권한·직무분리 통제 확인");
+  if(has("SELFAPP")||has("UNDERAPPROVED")) proc.push("결재 권한·전결규정 준수 여부 확인");
   if(has("BACKDATE")||has("PERIODEND")) proc.push("원시증빙의 거래 발생일 대사");
   if(has("ROUND")||has("MANUAL_BIG")||has("UNUSUAL")) proc.push("분개 산출근거·경영진 문의");
   if(has("BLANK")||has("KEYWORD")) proc.push("적요 보완 및 승인문서 징구");
@@ -603,11 +631,11 @@ document.getElementById("genSample").onclick=()=>{
   const sizeKey=document.getElementById("size").value;
   const rand=document.getElementById("genRandom").checked;
   ENTRIES=genSample(industryKey,txnKeys,n,sizeKey,rand);
-  // 회사 규모에서 나온 승인 한도를 위험분석에 자동 반영 (감사인이 회사로부터 입수한 값)
-  const th=SIZES[sizeKey].threshold;
-  document.getElementById("cfgThreshold").value=th;
+  // 회사 규모의 전결규정(승인 권한표)을 위험분석에 자동 반영
+  CURRENT_SIZE=sizeKey;
+  document.getElementById("tierTable").innerHTML=renderTiers(sizeKey);
   renderData();
-  document.getElementById("dataInfo").textContent += " · 이 회사 승인한도 "+won(th)+"원(규모 기준 자동 반영)";
+  document.getElementById("dataInfo").textContent += " · 전결규정 자동 반영("+SIZES[sizeKey].label.split(" ")[0]+")";
 };
 document.getElementById("downloadCsv").onclick=()=>{
   if(!ENTRIES.length){alert("먼저 분개장을 생성하세요.");return;}
@@ -666,6 +694,7 @@ populateTxns("general");
 const szSel=document.getElementById("size");
 szSel.innerHTML=Object.keys(SIZES).map(k=>`<option value="${k}">${SIZES[k].label}</option>`).join("");
 szSel.value="mid";
+document.getElementById("tierTable").innerHTML=renderTiers("mid");
 document.getElementById("ruleBody").innerHTML=RULES.map(r=>`<tr><td><b>${r.label}</b></td><td class="num">${r.w}</td><td style="white-space:normal">${r.desc}</td></tr>`).join("");
 </script>
 </body>
