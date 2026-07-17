@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JET · 분개 검증 툴 (Journal Entry Testing)</title>
+<style>
+  :root{
+    --bg:#eef1f6; --card:#fff; --ink:#1c2530; --muted:#6b7684; --line:#dde3ea;
+    --blue:#2f5fd0; --blue-d:#1f4aa8;
+    --hi:#c0392b; --hi-bg:#fdecea; --mid:#c77a0a; --mid-bg:#fdf3e2; --lo:#1f7a4d; --lo-bg:#e7f5ee;
+    --dr:#1f7a4d; --cr:#c0392b;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:"Segoe UI","Malgun Gothic",sans-serif;margin:0;background:var(--bg);color:var(--ink);font-size:14px;}
+  header{background:linear-gradient(100deg,#1f4aa8,#2f5fd0);color:#fff;padding:18px 26px;}
+  header h1{margin:0;font-size:20px;letter-spacing:-.3px;}
+  header p{margin:4px 0 0;opacity:.85;font-size:13px;}
+  .wrap{max-width:1120px;margin:0 auto;padding:22px;}
+  .tabs{display:flex;gap:2px;margin-bottom:18px;flex-wrap:wrap;}
+  .tab{padding:9px 18px;cursor:pointer;color:var(--muted);font-weight:600;border-radius:8px 8px 0 0;}
+  .tab.active{color:var(--blue-d);background:var(--card);box-shadow:0 -2px 0 var(--blue) inset;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:18px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  .card h2{margin:0 0 6px;font-size:16px;}
+  .card .sub{color:var(--muted);font-size:12.5px;margin:0 0 16px;line-height:1.5;}
+  button{padding:9px 16px;border:none;border-radius:8px;cursor:pointer;font-size:13.5px;font-weight:600;}
+  .b-pri{background:var(--blue);color:#fff;} .b-pri:hover{background:var(--blue-d);}
+  .b-gho{background:#eef1f6;color:var(--ink);}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  textarea{width:100%;min-height:120px;font-family:Consolas,monospace;font-size:12.5px;padding:10px;border:1px solid var(--line);border-radius:8px;resize:vertical;}
+  table{width:100%;border-collapse:collapse;}
+  th,td{padding:7px 9px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap;}
+  th{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;position:sticky;top:0;background:var(--card);}
+  .num{text-align:right;font-variant-numeric:tabular-nums;}
+  .scroll{overflow:auto;max-height:460px;border:1px solid var(--line);border-radius:8px;}
+  .dr{color:var(--dr);} .cr{color:var(--cr);}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .kpi .v{font-size:26px;font-weight:800;letter-spacing:-1px;}
+  .kpi .l{color:var(--muted);font-size:12px;margin-top:2px;}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;}
+  .p-hi{background:var(--hi-bg);color:var(--hi);} .p-mid{background:var(--mid-bg);color:var(--mid);} .p-lo{background:var(--lo-bg);color:var(--lo);}
+  .finding{border:1px solid var(--line);border-left:5px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:12px;background:#fbfcfe;}
+  .finding.hi{border-left-color:var(--hi);} .finding.mid{border-left-color:var(--mid);} .finding.lo{border-left-color:var(--lo);}
+  .finding .top{display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap;}
+  .finding .id{font-weight:800;} .finding .meta{color:var(--muted);font-size:12.5px;}
+  .flags{margin:9px 0;display:flex;gap:6px;flex-wrap:wrap;}
+  .flag{background:#eef2fb;color:var(--blue-d);border:1px solid #d5e0f7;border-radius:6px;padding:2px 8px;font-size:11.5px;font-weight:600;}
+  .interp{background:#fff;border:1px dashed var(--line);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.6;margin-top:8px;}
+  .interp b{color:var(--blue-d);}
+  .wp{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);}
+  .wp label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px;font-weight:700;}
+  .wp textarea{width:100%;min-height:46px;font-size:12px;border:1px solid var(--line);border-radius:6px;padding:6px;resize:vertical;font-family:inherit;}
+  .wp textarea:focus{outline:2px solid var(--blue);outline-offset:-1px;}
+  @media(max-width:700px){.wp{grid-template-columns:1fr;}}
+  .lines-mini{margin-top:8px;font-size:12.5px;color:#333;}
+  .lines-mini span{margin-right:14px;}
+  .bar-row{display:flex;align-items:center;gap:10px;margin:5px 0;font-size:12.5px;}
+  .bar-row .lab{width:190px;color:#333;}
+  .bar-track{flex:1;background:#eef1f6;border-radius:6px;height:16px;overflow:hidden;}
+  .bar-fill{height:100%;background:var(--blue);border-radius:6px;}
+  .benford{display:flex;gap:6px;align-items:flex-end;height:150px;padding-top:10px;}
+  .bf-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end;}
+  .bf-bars{position:relative;width:100%;flex:1;display:flex;align-items:flex-end;justify-content:center;gap:2px;}
+  .bf-actual{width:46%;background:var(--blue);border-radius:3px 3px 0 0;}
+  .bf-exp{width:46%;background:#c9d3e6;border-radius:3px 3px 0 0;}
+  .note{background:#f4f7fd;border:1px solid #dbe6fb;border-radius:8px;padding:12px 14px;font-size:12.5px;color:#33455f;line-height:1.6;}
+  .legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-top:8px;}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:2px;vertical-align:middle;margin-right:4px;}
+  select,input[type=number],input[type=text],input[type=date]{padding:7px 9px;border:1px solid var(--line);border-radius:7px;font-size:13px;}
+  .cfg{display:flex;gap:16px;flex-wrap:wrap;align-items:end;margin-bottom:14px;}
+  .cfg .f{display:flex;flex-direction:column;gap:4px;}
+  .cfg label{font-size:11.5px;color:var(--muted);}
+  .txns{display:flex;flex-wrap:wrap;gap:7px 18px;margin-bottom:14px;padding:11px 13px;background:#f7f9fc;border:1px solid var(--line);border-radius:8px;}
+  .hidden{display:none;}
+  .empty{color:var(--muted);text-align:center;padding:30px;}
+  code{background:#eef1f6;padding:1px 5px;border-radius:4px;font-size:12px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>JET · 분개 검증 툴 <span style="opacity:.7;font-weight:400;font-size:14px;">Journal Entry Testing</span></h1>
+  <p>ISA 240 · 경영진의 내부통제 무력화 위험 대응 — 분개 데이터를 위험 특성으로 스코어링하여 이상 전표를 식별</p>
+</header>
+
+<div class="wrap">
+  <div class="tabs">
+    <div class="tab active" data-tab="data">① 데이터</div>
+    <div class="tab" data-tab="risk">② 위험 분석</div>
+    <div class="tab" data-tab="dash">③ 대시보드</div>
+    <div class="tab" data-tab="about">④ 규칙 설명</div>
+  </div>
+
+  <!-- ① 데이터 -->
+  <section id="t-data">
+    <div class="card">
+      <h2>분개장 데이터 불러오기</h2>
+      <p class="sub">감사 대상 회사의 <b>산업</b>과 <b>주요 거래</b>를 고르면, 그 산업 특유의 분개 — 그리고 그 산업의 대표적 부정 시나리오 — 가 섞인 가상 분개장이 생성됩니다.</p>
+      <div class="cfg">
+        <div class="f"><label>산업 카테고리</label><select id="industry" style="min-width:190px"></select></div>
+        <div class="f"><label>정상 전표 수</label><input type="number" id="genNormal" value="180" min="20" max="2000" step="10"></div>
+        <div class="f"><label>위험 전표 수</label><input type="number" id="genRisk" value="6" min="0" max="40"></div>
+        <div class="f"><label>&nbsp;</label><label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink)"><input type="checkbox" id="genRandom" style="width:auto"> 매번 다르게(랜덤)</label></div>
+      </div>
+      <div class="note" id="indNote" style="margin-bottom:12px;"></div>
+      <div style="font-size:11.5px;color:var(--muted);font-weight:700;margin-bottom:6px;">주요 거래 선택 (체크한 거래만 정상 분개로 생성)</div>
+      <div id="txnBox" class="txns"></div>
+      <div class="toolbar" style="margin-bottom:14px;">
+        <button class="b-pri" id="genSample">가상 분개장 생성</button>
+        <button class="b-gho" id="downloadCsv">CSV 다운로드</button>
+        <button class="b-gho" id="showPaste">CSV 붙여넣기</button>
+        <span class="meta muted" id="dataInfo" style="color:var(--muted);font-size:12.5px;"></span>
+      </div>
+      <div id="pasteBox" class="hidden">
+        <p class="sub">형식: <code>전표번호,회계일자,입력일시,작성자,승인자,전표유형,차변계정,대변계정,금액,적요</code> (헤더 1줄 포함, 한 줄에 1전표)</p>
+        <textarea id="csv" placeholder="JE0001,2026-03-15,2026-03-15 14:20,김대리,박부장,수동,여비교통비,현금,182000,3월 출장비"></textarea>
+        <div class="toolbar" style="margin-top:8px;"><button class="b-pri" id="importCsv">불러오기</button></div>
+      </div>
+      <div class="scroll" style="margin-top:6px;">
+        <table id="dataTable"><thead><tr>
+          <th>전표번호</th><th>회계일자</th><th>입력일시</th><th>작성자</th><th>승인자</th><th>유형</th>
+          <th>차변계정</th><th>대변계정</th><th class="num">금액(원)</th><th>적요</th>
+        </tr></thead><tbody id="dataBody"><tr><td colspan="10" class="empty">데이터가 없습니다. 위에서 생성하세요.</td></tr></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ② 위험 분석 -->
+  <section id="t-risk" class="hidden">
+    <div class="card">
+      <h2>위험 스코어링 설정</h2>
+      <div class="cfg">
+        <div class="f"><label>승인 한도(원)</label><input type="number" id="cfgThreshold" value="10000000" step="1000000"></div>
+        <div class="f"><label>결산일(기말)</label><input type="date" id="cfgPeriodEnd" value="2026-06-30"></div>
+        <div class="f"><label>업무외 시간 시작(시)</label><input type="number" id="cfgNight" value="22" min="18" max="23"></div>
+        <div class="f"><button class="b-pri" id="runRisk">위험 분석 실행</button></div>
+      </div>
+      <div class="kpis" id="riskKpis"></div>
+    </div>
+    <div class="card">
+      <h2>식별된 이상 전표 <span class="muted" style="font-weight:400;font-size:13px;color:var(--muted);">(위험점수 내림차순)</span></h2>
+      <p class="sub">각 전표에 어떤 위험 특성이 걸렸는지와, 감사인 관점의 해석·후속 절차 제안을 함께 표시합니다. 아래 <b>수행절차·입수증빙·결론</b>을 입력하면 감사조서로 내보낼 수 있습니다.</p>
+      <div class="cfg" style="margin-bottom:12px;">
+        <div class="f"><label>조서 작성자</label><input type="text" id="wpAuthor" placeholder="예: 김OO 회계사" style="width:150px"></div>
+        <div class="f"><label>조서 검토자</label><input type="text" id="wpReviewer" placeholder="예: 이OO 파트너" style="width:150px"></div>
+        <div class="f"><button class="b-pri" id="exportWp">📄 감사조서 내보내기 (CSV)</button></div>
+      </div>
+      <div id="findings"><div class="empty">"위험 분석 실행"을 누르세요.</div></div>
+    </div>
+  </section>
+
+  <!-- ③ 대시보드 -->
+  <section id="t-dash" class="hidden">
+    <div class="card">
+      <h2>위험 규칙별 적발 건수</h2>
+      <div id="ruleBars"><div class="empty">위험 분석을 먼저 실행하세요.</div></div>
+    </div>
+    <div class="card">
+      <h2>벤포드 법칙 검정 (금액 첫 자리 분포)</h2>
+      <p class="sub">자연스러운 회계 데이터는 첫 자리가 1일 확률이 30.1%로 가장 높습니다(벤포드 법칙). 실제 분포가 기대치에서 크게 벗어나면 인위적 조작·조정 가능성을 시사합니다.</p>
+      <div class="benford" id="benford"></div>
+      <div class="legend"><span><i style="background:var(--blue)"></i>실제</span><span><i style="background:#c9d3e6"></i>벤포드 기대치</span></div>
+    </div>
+  </section>
+
+  <!-- ④ 규칙 설명 -->
+  <section id="t-about" class="hidden">
+    <div class="card">
+      <h2>적용된 위험 규칙 (Red Flags)</h2>
+      <p class="sub">ISA 240 문단 32·A41–A47(부적절한 분개 검토)에 근거한 실무 위험 특성입니다.</p>
+      <div class="scroll" style="max-height:none;">
+        <table id="ruleTable"><thead><tr><th>규칙</th><th>가중치</th><th>감사상 의미</th></tr></thead><tbody id="ruleBody"></tbody></table>
+      </div>
+      <div class="note" style="margin-top:14px;">
+        <b>위험등급 기준</b> — 위험점수 합계 기준: <span class="pill p-hi">높음 6점↑</span> <span class="pill p-mid">중간 3–5점</span> <span class="pill p-lo">낮음 1–2점</span>.
+        점수가 높을수록 여러 위험 특성이 중첩된 전표이므로 우선적으로 증빙 대사·문의 절차를 수행합니다.
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* ============ 유틸 ============ */
+const won = n => Math.round(n||0).toLocaleString("ko-KR");
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function pad(n){return String(n).padStart(2,"0");}
+function fmtDate(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}
+function fmtDT(d){return fmtDate(d)+" "+pad(d.getHours())+":"+pad(d.getMinutes());}
+
+/* ============ 공휴일(2026, 예시) ============ */
+const HOLIDAYS = new Set(["2026-01-01","2026-02-16","2026-02-17","2026-02-18","2026-03-01","2026-05-05","2026-05-24","2026-06-06"]);
+
+/* ============ 산업별 정의 ============ */
+// 각 산업: label, risk(핵심 감사위험 설명), accounts(계정→유형), txns(정상 거래 템플릿), planted(산업 특유 부정 시나리오), filler(추가 위험전표용 계정)
+const INDUSTRIES = {
+  general:{
+    label:"일반 제조·상거래",
+    risk:"표준적인 매입·매출·경비 거래입니다. 기본 red flag(업무외 시간·자기승인·라운드 금액·소급 등)를 학습하기 좋은 기본 데이터셋입니다.",
+    accounts:{현금:"자산",보통예금:"자산",매출채권:"자산",미수금:"자산",상품:"자산",비품:"자산",선급금:"자산",
+      매입채무:"부채",미지급금:"부채",선수금:"부채",미지급비용:"부채",자본금:"자본",이익잉여금:"자본",
+      상품매출:"수익",용역수익:"수익",잡이익:"수익",상품매출원가:"비용",급여:"비용",복리후생비:"비용",
+      여비교통비:"비용",지급수수료:"비용",감가상각비:"비용",이자비용:"비용",기타비용:"비용"},
+    txns:[
+      {key:"sale_cash",label:"상품 현금매출",dr:"현금",cr:"상품매출",auto:true,base:[300000,4000000],desc:"상품 현금매출"},
+      {key:"sale_cr",label:"상품 외상매출",dr:"매출채권",cr:"상품매출",auto:true,base:[500000,6000000],desc:"상품 외상매출"},
+      {key:"collect",label:"매출대금 회수",dr:"보통예금",cr:"매출채권",auto:true,base:[500000,6000000],desc:"매출대금 회수"},
+      {key:"purchase",label:"상품 매입",dr:"상품",cr:"매입채무",auto:true,base:[400000,5000000],desc:"상품 매입"},
+      {key:"pay",label:"매입대금 지급",dr:"매입채무",cr:"보통예금",auto:true,base:[400000,5000000],desc:"매입대금 지급"},
+      {key:"payroll",label:"급여 지급",dr:"급여",cr:"보통예금",auto:false,base:[2000000,4500000],desc:"월급여 지급"},
+      {key:"travel",label:"여비교통비",dr:"여비교통비",cr:"현금",auto:false,base:[50000,600000],desc:"출장 여비"},
+      {key:"welfare",label:"복리후생비",dr:"복리후생비",cr:"현금",auto:false,base:[30000,400000],desc:"직원 경조/식대"},
+      {key:"fee",label:"지급수수료",dr:"지급수수료",cr:"보통예금",auto:false,base:[100000,1500000],desc:"용역 수수료"},
+      {key:"depr",label:"감가상각",dr:"감가상각비",cr:"비품",auto:false,base:[100000,900000],desc:"월 감가상각"},
+      {key:"interest",label:"이자비용",dr:"이자비용",cr:"보통예금",auto:false,base:[50000,800000],desc:"차입금 이자"},
+    ],
+    planted:[
+      {postDate:"2026-06-30",dt:new Date(2026,5,30,23,40),preparer:"정CFO",approver:"정CFO",type:"수동",dr:"매출채권",cr:"상품매출",amount:50000000,desc:"기말 매출 조정"},
+      {postDate:"2026-05-27",dt:new Date(2026,5,16,15,10),preparer:"박부장",approver:"정CFO",type:"수동",dr:"미수금",cr:"용역수익",amount:32000000,desc:"기타 정산분 소급"},
+      {postDate:"2026-04-10",dt:new Date(2026,3,10,17,30),preparer:"박부장",approver:"박부장",type:"수동",dr:"지급수수료",cr:"보통예금",amount:9900000,desc:"컨설팅비"},
+      {postDate:"2026-04-22",dt:new Date(2026,3,22,17,50),preparer:"박부장",approver:"박부장",type:"수동",dr:"지급수수료",cr:"보통예금",amount:9950000,desc:"자문료"},
+      {postDate:"2026-04-04",dt:new Date(2026,3,4,2,15),preparer:"최차장",approver:"박부장",type:"수동",dr:"기타비용",cr:"미지급금",amount:12000000,desc:"기타 비용 계상"},
+      {postDate:"2026-03-01",dt:new Date(2026,2,1,10,5),preparer:"이과장",approver:"박부장",type:"수동",dr:"잡이익",cr:"이익잉여금",amount:20000000,desc:"이익 대체"},
+      {postDate:"2026-05-14",dt:new Date(2026,4,14,16,0),preparer:"최차장",approver:"박부장",type:"수동",dr:"선급금",cr:"현금",amount:8000000,desc:""},
+      {postDate:"2026-06-25",dt:new Date(2026,5,25,18,40),preparer:"박부장",approver:"정CFO",type:"수동",dr:"상품매출",cr:"현금",amount:15000000,desc:"매출 취소분"},
+    ],
+    filler:{dr:"기타비용",cr:"미지급금"},
+  },
+
+  shipbuilding:{
+    label:"조선 (선박 건조)",
+    risk:"조선업은 수년에 걸친 건조계약을 <b>진행기준(POC)</b>으로 수익인식합니다. 진행률 = 총예정원가 대비 투입원가 추정이므로, <b>진행률·미청구공사(계약자산)를 부풀려 미래 수익을 앞당기는 부정</b>이 핵심 위험입니다(대우조선해양 사례). 총예정원가 과소추정·원가 이연도 주의 대상입니다.",
+    accounts:{보통예금:"자산",공사미수금:"자산",미청구공사:"자산",원재료:"자산",재공품:"자산",선박:"자산",
+      초과청구공사:"부채",미지급금:"부채",하자보수충당부채:"부채",공사수익:"수익",공사원가:"비용",급여:"비용",지급수수료:"비용",하자보수비:"비용"},
+    txns:[
+      {key:"advance",label:"선수금(계약금) 수령",dr:"보통예금",cr:"초과청구공사",auto:false,base:[100000000,500000000],desc:"건조계약 선수금"},
+      {key:"material",label:"원재료(후판) 매입",dr:"원재료",cr:"미지급금",auto:true,base:[30000000,200000000],desc:"강재 매입"},
+      {key:"cost",label:"공사원가 투입",dr:"공사원가",cr:"미지급금",auto:true,base:[20000000,150000000],desc:"외주·노무 원가"},
+      {key:"revenue",label:"진행기준 수익인식",dr:"미청구공사",cr:"공사수익",auto:false,base:[50000000,400000000],desc:"진행률 기준 공사수익"},
+      {key:"billing",label:"기성 청구",dr:"공사미수금",cr:"미청구공사",auto:false,base:[50000000,300000000],desc:"발주처 기성청구"},
+      {key:"collect",label:"공사대금 회수",dr:"보통예금",cr:"공사미수금",auto:true,base:[50000000,300000000],desc:"기성대금 회수"},
+      {key:"warranty",label:"하자보수충당",dr:"하자보수비",cr:"하자보수충당부채",auto:false,base:[5000000,50000000],desc:"하자보수충당 설정"},
+    ],
+    planted:[
+      {postDate:"2026-06-30",dt:new Date(2026,5,30,23,20),preparer:"정CFO",approver:"정CFO",type:"수동",dr:"미청구공사",cr:"공사수익",amount:800000000,desc:"기말 진행률 상향 조정"},
+      {postDate:"2026-06-26",dt:new Date(2026,5,26,20,10),preparer:"박부장",approver:"정CFO",type:"수동",dr:"재공품",cr:"공사원가",amount:300000000,desc:"원가 이연분 대체"},
+      {postDate:"2026-05-20",dt:new Date(2026,5,12,15,0),preparer:"박부장",approver:"박부장",type:"수동",dr:"미청구공사",cr:"공사수익",amount:150000000,desc:"미청구공사 추가 계상 소급"},
+    ],
+    filler:{dr:"공사원가",cr:"미지급금"},
+  },
+
+  construction:{
+    label:"건설 (주택·플랜트)",
+    risk:"건설업도 <b>진행기준</b>으로 분양·공사 수익을 인식합니다. 진행률 조작으로 <b>분양수익·미청구공사를 과대계상</b>하거나, <b>대손충당금을 과소·환입</b>해 이익을 부풀리는 것이 대표 위험입니다. PF(프로젝트 파이낸싱) 우발부채·이자 처리도 주의합니다.",
+    accounts:{보통예금:"자산",공사미수금:"자산",미청구공사:"자산",대손충당금:"자산",분양선수금:"부채",초과청구공사:"부채",PF차입금:"부채",미지급금:"부채",
+      분양수익:"수익",공사수익:"수익",공사원가:"비용",이자비용:"비용",대손상각비:"비용",지급수수료:"비용"},
+    txns:[
+      {key:"presale",label:"분양 선수금 수령",dr:"보통예금",cr:"분양선수금",auto:false,base:[50000000,300000000],desc:"아파트 분양 계약금"},
+      {key:"cost",label:"공사원가 투입",dr:"공사원가",cr:"미지급금",auto:true,base:[30000000,200000000],desc:"협력사 기성 원가"},
+      {key:"revenue",label:"진행기준 분양수익",dr:"미청구공사",cr:"분양수익",auto:false,base:[50000000,400000000],desc:"진행률 기준 분양수익"},
+      {key:"billing",label:"기성 청구",dr:"공사미수금",cr:"미청구공사",auto:false,base:[50000000,300000000],desc:"발주처 기성청구"},
+      {key:"collect",label:"공사대금 회수",dr:"보통예금",cr:"공사미수금",auto:true,base:[50000000,300000000],desc:"기성대금 회수"},
+      {key:"pf",label:"PF 차입",dr:"보통예금",cr:"PF차입금",auto:false,base:[200000000,1000000000],desc:"프로젝트 파이낸싱 차입"},
+      {key:"interest",label:"PF 이자 지급",dr:"이자비용",cr:"보통예금",auto:false,base:[5000000,80000000],desc:"PF 이자"},
+    ],
+    planted:[
+      {postDate:"2026-06-29",dt:new Date(2026,5,29,22,50),preparer:"정CFO",approver:"정CFO",type:"수동",dr:"미청구공사",cr:"분양수익",amount:600000000,desc:"기말 진행률 조정"},
+      {postDate:"2026-06-24",dt:new Date(2026,5,24,19,30),preparer:"박부장",approver:"정CFO",type:"수동",dr:"대손충당금",cr:"대손상각비",amount:120000000,desc:"대손충당금 환입"},
+      {postDate:"2026-05-18",dt:new Date(2026,5,10,16,0),preparer:"박부장",approver:"박부장",type:"수동",dr:"미청구공사",cr:"분양수익",amount:200000000,desc:"미청구공사 소급 계상"},
+    ],
+    filler:{dr:"공사원가",cr:"미지급금"},
+  },
+
+  semiconductor:{
+    label:"반도체",
+    risk:"반도체는 <b>대규모 설비투자(감가상각 시점·건설중인자산 대체)</b>와 <b>재고 진부화·R&D 자산화</b> 판단이 핵심입니다. 이익을 부풀리려 <b>R&D를 부적절하게 개발비로 자산화</b>하거나, <b>재고평가손실을 환입</b>하거나, <b>매출을 조기 인식</b>하는 것이 대표 위험입니다.",
+    accounts:{현금:"자산",매출채권:"자산",제품:"자산",재공품:"자산",원재료:"자산",기계장치:"자산",건설중인자산:"자산",개발비:"자산",감가상각누계액:"자산",재고자산평가충당금:"자산",
+      미지급금:"부채",제품매출:"수익",매출원가:"비용",감가상각비:"비용",연구개발비:"비용",재고자산평가손실:"비용",지급수수료:"비용"},
+    txns:[
+      {key:"sale",label:"반도체 제품 매출",dr:"매출채권",cr:"제품매출",auto:true,base:[50000000,500000000],desc:"제품 매출"},
+      {key:"cogs",label:"매출원가 인식",dr:"매출원가",cr:"제품",auto:true,base:[30000000,300000000],desc:"매출원가 인식"},
+      {key:"capex",label:"설비(장비) 투자",dr:"기계장치",cr:"미지급금",auto:false,base:[100000000,800000000],desc:"노광장비 취득"},
+      {key:"cip",label:"건설중인자산 본계정 대체",dr:"기계장치",cr:"건설중인자산",auto:false,base:[100000000,600000000],desc:"팹 완공 본계정 전환"},
+      {key:"depr",label:"감가상각",dr:"감가상각비",cr:"감가상각누계액",auto:true,base:[20000000,200000000],desc:"설비 감가상각"},
+      {key:"material",label:"원재료(웨이퍼) 매입",dr:"원재료",cr:"미지급금",auto:true,base:[20000000,150000000],desc:"웨이퍼·소재 매입"},
+      {key:"rnd",label:"연구개발비 지출",dr:"연구개발비",cr:"현금",auto:false,base:[10000000,120000000],desc:"R&D 경상 지출"},
+      {key:"inv",label:"재고 저가법 평가손실",dr:"재고자산평가손실",cr:"재고자산평가충당금",auto:false,base:[10000000,100000000],desc:"진부화 재고 평가손실"},
+    ],
+    planted:[
+      {postDate:"2026-06-30",dt:new Date(2026,5,30,23,10),preparer:"정CFO",approver:"정CFO",type:"수동",dr:"개발비",cr:"연구개발비",amount:400000000,desc:"연구개발비 개발비로 자본화"},
+      {postDate:"2026-06-27",dt:new Date(2026,5,27,20,0),preparer:"박부장",approver:"정CFO",type:"수동",dr:"재고자산평가충당금",cr:"재고자산평가손실",amount:150000000,desc:"재고평가충당금 환입"},
+      {postDate:"2026-06-28",dt:new Date(2026,5,28,21,0),preparer:"박부장",approver:"박부장",type:"수동",dr:"매출채권",cr:"제품매출",amount:300000000,desc:"기말 매출 조기 계상"},
+    ],
+    filler:{dr:"지급수수료",cr:"미지급금"},
+  },
+};
+// 전체 계정→유형 병합 맵 (위험 규칙에서 사용)
+const ACC = Object.assign({}, ...Object.values(INDUSTRIES).map(i=>i.accounts));
+const PREP_NORMAL=["김대리","이과장","최차장"];
+
+/* ============ 데이터 생성 ============ */
+let ENTRIES = [];
+function genSample(industryKey, txnKeys, normalCount, riskCount, randomSeed){
+  const ind = INDUSTRIES[industryKey] || INDUSTRIES.general;
+  const seed = randomSeed ? ((Date.now() ^ (Math.random()*0xffffffff))>>>0) : 20260716;
+  const rnd=mulberry32(seed); const out=[];
+  const pick=a=>a[Math.floor(rnd()*a.length)];
+  const bizTime=(dateStr)=>{const d=new Date(dateStr+"T00:00:00");d.setHours(9+Math.floor(rnd()*8),Math.floor(rnd()*60));return d;};
+  // 선택된 거래만 (없으면 전체)
+  let txns = (txnKeys && txnKeys.length) ? ind.txns.filter(t=>txnKeys.includes(t.key)) : ind.txns.slice();
+  if(!txns.length) txns = ind.txns.slice();
+  // 정상 전표
+  const nNormal = Math.max(0, normalCount|0);
+  for(let i=0;i<nNormal;i++){
+    let d;
+    do{const m=Math.floor(rnd()*6);const day=1+Math.floor(rnd()*28);d=new Date(2026,m,day);}
+    while(d.getDay()===0||d.getDay()===6||HOLIDAYS.has(fmtDate(d)));
+    const t=pick(txns);
+    let amt=Math.round((t.base[0]+rnd()*(t.base[1]-t.base[0]))/1000)*1000+Math.floor(rnd()*900)+50;
+    const dt=bizTime(fmtDate(d));
+    out.push({postDate:fmtDate(d),entryDT:dt,preparer:pick(PREP_NORMAL),approver:"박부장",
+      type:t.auto?"자동":"수동",dr:t.dr,cr:t.cr,amount:amt,desc:t.desc});
+  }
+  // 위험 전표: 산업 특유 시나리오 우선, 부족하면 승인한도 회피형 filler로 보충
+  const nRisk = Math.max(0, riskCount|0);
+  const chosen = ind.planted.slice(0, nRisk);
+  // 보충 위험전표: 승인한도 직하 + 의심키워드 (평일·업무시간·타인승인으로 완만하게 → 산업 특유 부정이 항상 상위)
+  while(chosen.length < nRisk){
+    let fd; do{const m=Math.floor(rnd()*6);const day=1+Math.floor(rnd()*27);fd=new Date(2026,m,day);}
+    while(fd.getDay()===0||fd.getDay()===6||HOLIDAYS.has(fmtDate(fd)));
+    const fdt=new Date(fmtDate(fd)+"T00:00:00"); fdt.setHours(9+Math.floor(rnd()*8),Math.floor(rnd()*60));
+    chosen.push({postDate:fmtDate(fd),dt:fdt,preparer:"박부장",approver:"정CFO",type:"수동",
+      dr:ind.filler.dr,cr:ind.filler.cr,amount:(9800+Math.floor(rnd()*190))*1000,
+      desc:pick(["기타 조정","임시 계상","비용 대체","정산분"])});
+  }
+  chosen.forEach(p=>out.push({postDate:p.postDate,entryDT:p.dt,preparer:p.preparer,approver:p.approver,
+    type:p.type,dr:p.dr,cr:p.cr,amount:p.amount,desc:p.desc}));
+  // 날짜순 정렬 후 전표번호 부여
+  out.sort((a,b)=>a.entryDT-b.entryDT);
+  out.forEach((e,i)=>e.id="JE"+String(i+1).padStart(4,"0"));
+  return out;
+}
+
+function renderData(){
+  const b=document.getElementById("dataBody");
+  document.getElementById("dataInfo").textContent = ENTRIES.length? `총 ${ENTRIES.length}건 로드됨` : "";
+  if(!ENTRIES.length){b.innerHTML='<tr><td colspan="10" class="empty">데이터가 없습니다.</td></tr>';return;}
+  b.innerHTML=ENTRIES.map(e=>`<tr>
+    <td>${e.id}</td><td>${e.postDate}</td><td>${fmtDT(e.entryDT)}</td><td>${e.preparer}</td><td>${e.approver}</td>
+    <td>${e.type}</td><td class="dr">${e.dr}</td><td class="cr">${e.cr}</td><td class="num">${won(e.amount)}</td><td>${e.desc||'<span style="color:#c0392b">(공란)</span>'}</td>
+  </tr>`).join("");
+}
+
+/* ============ 산업/거래 UI ============ */
+function populateTxns(key){
+  const ind=INDUSTRIES[key]||INDUSTRIES.general;
+  document.getElementById("indNote").innerHTML="<b>"+ind.label+" · 핵심 감사위험</b><br>"+ind.risk;
+  document.getElementById("txnBox").innerHTML=ind.txns.map(t=>
+    `<label style="display:flex;gap:5px;align-items:center;font-size:12.5px;color:var(--ink)"><input type="checkbox" value="${t.key}" checked style="width:auto"> ${t.label}</label>`).join("");
+}
+
+/* ============ 위험 규칙 ============ */
+const SUS_WORDS=["조정","임시","수정","기타","정산","대체","취소","소급","미상","환입","자본화","plug","reclass"];
+const RULES=[
+  {id:"OFFHOURS",label:"업무외 시간 전기",w:2,desc:"심야 등 정상 근무시간 외에 입력된 전표. 통제 우회·비인가 처리 가능성."},
+  {id:"WEEKEND",label:"주말 전기",w:2,desc:"토·일요일에 입력된 전표. 정상 결재선을 벗어난 처리 가능성."},
+  {id:"HOLIDAY",label:"공휴일 전기",w:2,desc:"공휴일에 입력된 전표. 업무 외 처리로 인한 통제 무력화 위험."},
+  {id:"BACKDATE",label:"소급 입력(backdating)",w:3,desc:"회계일자보다 한참 뒤에 입력 — 과거 기간에 소급 계상. 기간귀속·이익조정 위험."},
+  {id:"PERIODEND",label:"결산 임박 수동전표",w:2,desc:"기말 직전 수동 입력. 마감을 앞둔 실적 조정 위험 구간."},
+  {id:"ROUND",label:"라운드 금액",w:1,desc:"백만원 단위로 딱 떨어지는 금액. 실제 거래보다 추정·조정 분개일 가능성."},
+  {id:"BELOW",label:"승인한도 직하",w:3,desc:"승인 한도 바로 아래 금액. 상위자 승인 회피 목적의 분할·조정 위험."},
+  {id:"BLANK",label:"적요 공란",w:2,desc:"거래 설명이 없음. 목적 불명확 — 부적절 분개의 대표적 징후."},
+  {id:"KEYWORD",label:"의심 키워드 적요",w:1,desc:"'조정·환입·자본화·대체' 등 모호한 표현. 근거 불충분한 수정분개 가능성."},
+  {id:"SELFAPP",label:"작성자=승인자",w:3,desc:"입력자와 승인자가 동일. 직무분리 미비, 자기승인(self-approval) 위험."},
+  {id:"MANUAL_BIG",label:"수동·거액 전표",w:2,desc:"시스템 자동생성이 아닌 수동 입력이면서 상위 금액. 경영진 개입 여지."},
+  {id:"UNUSUAL",label:"비경상 계정 조합",w:2,desc:"수익을 차변에, 비용을 대변에(환입) 등 통상과 반대 방향. 취소·조정 위장 위험."},
+  {id:"RARE",label:"드문 계정 사용",w:1,desc:"거의 쓰이지 않는 계정. 우회 처리를 위한 임시 계정 사용 가능성."},
+];
+const RULEMAP=Object.fromEntries(RULES.map(r=>[r.id,r]));
+
+let RESULT=[];
+const COMMENTS={};  // 전표별 감사인 코멘트 {전표번호:{proc,evid,concl}}
+const esc=s=>String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+window.setComment=function(id,field,val){(COMMENTS[id]=COMMENTS[id]||{})[field]=val;};
+
+function runRisk(){
+  if(!ENTRIES.length){alert("먼저 데이터를 생성/불러오세요.");return;}
+  const threshold=+document.getElementById("cfgThreshold").value||10000000;
+  const periodEnd=new Date(document.getElementById("cfgPeriodEnd").value+"T00:00:00");
+  const nightStart=+document.getElementById("cfgNight").value||22;
+  const freq={}; ENTRIES.forEach(e=>{freq[e.dr]=(freq[e.dr]||0)+1;freq[e.cr]=(freq[e.cr]||0)+1;});
+  const sorted=[...ENTRIES].map(e=>e.amount).sort((a,b)=>b-a);
+  const bigCut=sorted[Math.floor(sorted.length*0.05)]||Infinity;
+
+  RESULT=ENTRIES.map(e=>{
+    const fired=[]; const dow=e.entryDT.getDay(); const hr=e.entryDT.getHours();
+    const post=new Date(e.postDate+"T00:00:00");
+    if(hr>=nightStart||hr<6) fired.push("OFFHOURS");
+    if(dow===6||dow===0) fired.push("WEEKEND");
+    if(HOLIDAYS.has(e.postDate)) fired.push("HOLIDAY");
+    const dayGap=(e.entryDT - post)/86400000;
+    if(dayGap>5) fired.push("BACKDATE");
+    const daysToEnd=(periodEnd-post)/86400000;
+    if(daysToEnd>=0&&daysToEnd<=3&&e.type==="수동") fired.push("PERIODEND");
+    if(e.amount>=1000000 && e.amount%1000000===0) fired.push("ROUND");
+    if(e.amount>=threshold*0.95 && e.amount<threshold) fired.push("BELOW");
+    if(!e.desc||!e.desc.trim()) fired.push("BLANK");
+    else if(SUS_WORDS.some(w=>e.desc.includes(w))) fired.push("KEYWORD");
+    if(e.preparer===e.approver) fired.push("SELFAPP");
+    if(e.type==="수동" && e.amount>=bigCut) fired.push("MANUAL_BIG");
+    if(ACC[e.dr]==="수익" || ACC[e.cr]==="비용") fired.push("UNUSUAL");
+    if(freq[e.dr]<=3 || freq[e.cr]<=3) fired.push("RARE");
+    const score=fired.reduce((s,id)=>s+RULEMAP[id].w,0);
+    return {...e,fired,score};
+  }).filter(r=>r.score>0).sort((a,b)=>b.score-a.score);
+
+  renderKpis(); renderFindings(); renderRuleBars(); renderBenford();
+}
+
+function level(score){return score>=6?"hi":score>=3?"mid":"lo";}
+function levelLabel(s){return s>=6?"높음":s>=3?"중간":"낮음";}
+
+function renderKpis(){
+  const hi=RESULT.filter(r=>r.score>=6).length, mid=RESULT.filter(r=>r.score>=3&&r.score<6).length;
+  const flaggedAmt=RESULT.reduce((s,r)=>s+r.amount,0);
+  document.getElementById("riskKpis").innerHTML=`
+    <div class="kpi"><div class="v">${ENTRIES.length}</div><div class="l">전체 전표</div></div>
+    <div class="kpi"><div class="v" style="color:var(--blue)">${RESULT.length}</div><div class="l">위험 식별 전표</div></div>
+    <div class="kpi"><div class="v" style="color:var(--hi)">${hi}</div><div class="l">위험 높음</div></div>
+    <div class="kpi"><div class="v" style="color:var(--mid)">${mid}</div><div class="l">위험 중간</div></div>
+    <div class="kpi"><div class="v">${won(flaggedAmt)}</div><div class="l">위험전표 금액 합(원)</div></div>`;
+}
+
+function interpret(r){
+  const has=id=>r.fired.includes(id);
+  const parts=[];
+  if(has("SELFAPP")&&has("PERIODEND")||has("SELFAPP")&&has("OFFHOURS"))
+    parts.push("입력자와 승인자가 동일하고 정상 업무시간·결재선을 벗어나 처리되어, <b>경영진의 내부통제 무력화(ISA 240)</b> 징후가 강합니다.");
+  if(has("BACKDATE")) parts.push("회계일자보다 뒤에 소급 입력되어 <b>기간귀속(cut-off) 및 이익조정 위험</b>이 있습니다. 원거래 증빙의 실제 발생일을 대사해야 합니다.");
+  if(has("BELOW")) parts.push("금액이 승인 한도 바로 아래에 설정되어 <b>승인 회피 목적의 분할 처리</b> 가능성이 있습니다.");
+  if(has("UNUSUAL")) parts.push("수익/비용 계정이 통상과 반대 방향(수익 차변·비용 대변 환입 등)으로 사용되어 <b>수익 과대·비용 축소를 위장</b>했을 여지가 있습니다.");
+  if(has("ROUND")&&has("MANUAL_BIG")) parts.push("실거래가 아닌 <b>추정·조정성 거액 수동분개</b>로 보이므로 산출 근거를 문의해야 합니다.");
+  if(has("BLANK")) parts.push("적요가 공란이라 <b>거래 목적이 불명확</b>합니다. 담당자 문의 및 승인 문서 확인이 필요합니다.");
+  if(!parts.length) parts.push("단일 위험 특성이 식별되었습니다. 표본 검토 대상에 포함하여 증빙과 대사합니다.");
+  const proc=[];
+  if(has("SELFAPP")) proc.push("결재 권한·직무분리 통제 확인");
+  if(has("BACKDATE")||has("PERIODEND")) proc.push("원시증빙의 거래 발생일 대사");
+  if(has("ROUND")||has("MANUAL_BIG")||has("UNUSUAL")) proc.push("분개 산출근거·경영진 문의");
+  if(has("BLANK")||has("KEYWORD")) proc.push("적요 보완 및 승인문서 징구");
+  return {why:parts.join(" "), proc:[...new Set(proc)]};
+}
+
+function renderFindings(){
+  const box=document.getElementById("findings");
+  if(!RESULT.length){box.innerHTML='<div class="empty">위험으로 식별된 전표가 없습니다.</div>';return;}
+  box.innerHTML=RESULT.map(r=>{
+    const lv=level(r.score); const it=interpret(r); const cm=COMMENTS[r.id]||{};
+    return `<div class="finding ${lv}">
+      <div class="top">
+        <span><span class="id">${r.id}</span> <span class="pill p-${lv}">위험 ${levelLabel(r.score)} · ${r.score}점</span></span>
+        <span class="meta">${r.postDate} · 입력 ${fmtDT(r.entryDT)} · ${r.type} · 작성 ${r.preparer} / 승인 ${r.approver}</span>
+      </div>
+      <div class="lines-mini"><span class="dr">(차) ${r.dr} ${won(r.amount)}</span><span class="cr">(대) ${r.cr} ${won(r.amount)}</span><span>적요: ${r.desc||'(공란)'}</span></div>
+      <div class="flags">${r.fired.map(id=>`<span class="flag">${RULEMAP[id].label} +${RULEMAP[id].w}</span>`).join("")}</div>
+      <div class="interp"><b>▶ 감사인 해석:</b> ${it.why}${it.proc.length?`<br><b>▶ 후속 절차:</b> ${it.proc.join(" · ")}`:""}</div>
+      <div class="wp">
+        <div><label>수행 절차</label><textarea placeholder="예: 세금계산서·계약서 대사, 담당자 문의" oninput="setComment('${r.id}','proc',this.value)">${esc(cm.proc)}</textarea></div>
+        <div><label>입수 증빙</label><textarea placeholder="예: 세금계산서 사본, 이메일 소명" oninput="setComment('${r.id}','evid',this.value)">${esc(cm.evid)}</textarea></div>
+        <div><label>결론</label><textarea placeholder="예: 기간귀속 오류 확인, 수정권고 / 예외없음" oninput="setComment('${r.id}','concl',this.value)">${esc(cm.concl)}</textarea></div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderRuleBars(){
+  const box=document.getElementById("ruleBars");
+  const cnt={}; RULES.forEach(r=>cnt[r.id]=0);
+  RESULT.forEach(r=>r.fired.forEach(id=>cnt[id]++));
+  const max=Math.max(1,...Object.values(cnt));
+  const rows=RULES.slice().sort((a,b)=>cnt[b.id]-cnt[a.id]).map(r=>`
+    <div class="bar-row"><span class="lab">${r.label}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${cnt[r.id]/max*100}%"></div></div>
+      <span style="width:34px;text-align:right;font-weight:700">${cnt[r.id]}</span></div>`).join("");
+  box.innerHTML=rows;
+}
+
+function renderBenford(){
+  const exp=[30.1,17.6,12.5,9.7,7.9,6.7,5.8,5.1,4.6];
+  const cnt=[0,0,0,0,0,0,0,0,0]; let tot=0;
+  ENTRIES.forEach(e=>{const d=String(Math.abs(Math.round(e.amount))).replace(/^0+/,"")[0];const i=+d-1;if(i>=0&&i<9){cnt[i]++;tot++;}});
+  const box=document.getElementById("benford");
+  box.innerHTML=exp.map((ex,i)=>{
+    const act=tot?cnt[i]/tot*100:0; const scale=1.9;
+    return `<div class="bf-col"><div class="bf-bars">
+      <div class="bf-actual" style="height:${act*scale}%" title="실제 ${act.toFixed(1)}%"></div>
+      <div class="bf-exp" style="height:${ex*scale}%" title="기대 ${ex}%"></div>
+    </div><div style="font-size:11px;color:#6b7684">${i+1}</div></div>`;
+  }).join("");
+}
+
+/* ============ CSV 불러오기 ============ */
+function importCsv(){
+  const raw=document.getElementById("csv").value.trim(); if(!raw){return;}
+  const lines=raw.split(/\r?\n/).filter(l=>l.trim());
+  const start=lines[0].includes("전표번호")?1:0; const out=[];
+  for(let i=start;i<lines.length;i++){
+    const c=lines[i].split(",").map(s=>s.trim());
+    if(c.length<9) continue;
+    const [id,post,dt,prep,app,type,dr,cr,amt,...rest]=c;
+    out.push({id,postDate:post,entryDT:new Date(dt.replace(" ","T")),preparer:prep,approver:app,
+      type,dr,cr,amount:+amt,desc:rest.join(",")});
+  }
+  if(!out.length){alert("파싱된 전표가 없습니다. 형식을 확인하세요.");return;}
+  ENTRIES=out; renderData(); alert(out.length+"건 불러왔습니다.");
+}
+
+/* ============ 탭/이벤트 ============ */
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active")); t.classList.add("active");
+  ["data","risk","dash","about"].forEach(n=>document.getElementById("t-"+n).classList.toggle("hidden",n!==t.dataset.tab));
+});
+document.getElementById("genSample").onclick=()=>{
+  const industryKey=document.getElementById("industry").value;
+  const txnKeys=[...document.querySelectorAll("#txnBox input:checked")].map(c=>c.value);
+  const n=+document.getElementById("genNormal").value||180;
+  const r=+document.getElementById("genRisk").value||0;
+  const rand=document.getElementById("genRandom").checked;
+  ENTRIES=genSample(industryKey,txnKeys,n,r,rand); renderData();
+};
+document.getElementById("downloadCsv").onclick=()=>{
+  if(!ENTRIES.length){alert("먼저 분개장을 생성하세요.");return;}
+  const head="전표번호,회계일자,입력일시,작성자,승인자,전표유형,차변계정,대변계정,금액,적요";
+  const rows=ENTRIES.map(e=>[e.id,e.postDate,fmtDT(e.entryDT),e.preparer,e.approver,e.type,e.dr,e.cr,e.amount,(e.desc||"").replace(/,/g,";")].join(","));
+  const csv="﻿"+head+"\n"+rows.join("\n"); // BOM: 엑셀 한글깨짐 방지
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="가상분개장_"+new Date().toISOString().slice(0,10)+".csv"; a.click();
+  URL.revokeObjectURL(a.href);
+};
+document.getElementById("showPaste").onclick=()=>document.getElementById("pasteBox").classList.toggle("hidden");
+document.getElementById("importCsv").onclick=importCsv;
+document.getElementById("runRisk").onclick=runRisk;
+
+/* ============ 감사조서 내보내기 ============ */
+function exportWorkpaper(){
+  if(!RESULT.length){alert("먼저 '위험 분석 실행'을 눌러 이상 전표를 식별하세요.");return;}
+  const author=document.getElementById("wpAuthor").value.trim();
+  const reviewer=document.getElementById("wpReviewer").value.trim();
+  const today=new Date().toISOString().slice(0,10);
+  const totalAmt=ENTRIES.reduce((s,e)=>s+e.amount,0);
+  const strip=s=>String(s||"").replace(/<[^>]+>/g,"");
+  const q=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
+  const meta=[
+    ["감사조서 : 분개 검증 (Journal Entry Testing)"],
+    ["근거","회계감사기준서 240 — 경영진의 내부통제 무력화 위험 대응"],
+    ["작성자",author,"검토자",reviewer,"작성일",today],
+    [],
+    ["[1. 데이터 완전성 대사]"],
+    ["총 전표 수",ENTRIES.length,"차변 합계",totalAmt,"대변 합계",totalAmt,"대차","일치"],
+    ["[2. 위험 추출 결과]","전체 "+ENTRIES.length+"건 중 "+RESULT.length+"건 이상전표 식별"],
+    [],
+    ["[3. 개별 항목 검토]"],
+  ];
+  const cols=["전표번호","회계일자","입력일시","작성자","승인자","유형","차변계정","대변계정","금액(원)","위험점수","위험등급","적발 Red Flag","자동 위험해석","수행 절차","입수 증빙","결론"];
+  const rows=RESULT.map(r=>{
+    const c=COMMENTS[r.id]||{}; const it=interpret(r);
+    return [r.id,r.postDate,fmtDT(r.entryDT),r.preparer,r.approver,r.type,r.dr,r.cr,r.amount,r.score,levelLabel(r.score),
+      r.fired.map(id=>RULEMAP[id].label).join(" / "),strip(it.why),c.proc||"",c.evid||"",c.concl||""];
+  });
+  const lines=[...meta.map(m=>m.map(q).join(",")), cols.map(q).join(","), ...rows.map(r=>r.map(q).join(","))];
+  const csv="﻿"+lines.join("\r\n");  // BOM: 엑셀 한글 정상 표시
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="감사조서_JET_"+today+".csv"; a.click(); URL.revokeObjectURL(a.href);
+}
+document.getElementById("exportWp").onclick=exportWorkpaper;
+
+/* ============ 초기화 ============ */
+const indSel=document.getElementById("industry");
+indSel.innerHTML=Object.keys(INDUSTRIES).map(k=>`<option value="${k}">${INDUSTRIES[k].label}</option>`).join("");
+indSel.value="general";
+indSel.onchange=()=>populateTxns(indSel.value);
+populateTxns("general");
+document.getElementById("ruleBody").innerHTML=RULES.map(r=>`<tr><td><b>${r.label}</b></td><td class="num">${r.w}</td><td style="white-space:normal">${r.desc}</td></tr>`).join("");
+</script>
+</body>
+</html>
