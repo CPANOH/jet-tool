@@ -360,6 +360,29 @@ const INDUSTRIES = {
     ],
     filler:{dr:"서버비",cr:"미지급금"},
   },
+
+  battery:{
+    label:"2차전지·전자부품 (수출 중심)",
+    risk:"2차전지·전자부품 제조업(수출 비중 약 85% : 내수 15%). <b>매출이 정체·감소하는 국면에서는 매출 과대계상 유인</b>이 커집니다. 특히 수출 매출은 <b>선적 기준 수익인식(cut-off)</b>과 <b>환율 적용</b>에서 조작 여지가 있어 — 기말 선적 미완료분 조기인식, 가공 수출매출 소급, 환율 과대적용, 내수 밀어내기가 핵심 위험입니다. (매출 외 거래를 체크 해제하면 매출에 집중한 JET가 됩니다.)",
+    accounts:{현금:"자산",매출채권:"자산",미수금:"자산",제품:"자산",재공품:"자산",원재료:"자산",기계장치:"자산",건설중인자산:"자산",감가상각누계액:"자산",
+      미지급금:"부채",선수금:"부채",수출매출:"수익",내수매출:"수익",매출원가:"비용",감가상각비:"비용",지급수수료:"비용",외환차손:"비용"},
+    txns:[
+      {key:"export",label:"수출 제품 매출",dr:"매출채권",cr:"수출매출",auto:true,base:[50000000,600000000],desc:"2차전지 수출 매출",w:6},
+      {key:"domestic",label:"내수 제품 매출",dr:"매출채권",cr:"내수매출",auto:true,base:[20000000,200000000],desc:"국내 제품 매출",w:1},
+      {key:"collect",label:"수출대금 회수",dr:"현금",cr:"매출채권",auto:true,base:[50000000,500000000],desc:"수출대금 회수",w:3},
+      {key:"cogs",label:"매출원가 인식",dr:"매출원가",cr:"제품",auto:true,base:[40000000,400000000],desc:"매출원가 인식",w:3},
+      {key:"material",label:"원재료(양극재 등) 매입",dr:"원재료",cr:"미지급금",auto:true,base:[30000000,300000000],desc:"양극재·음극재 매입",w:2},
+      {key:"capex",label:"설비(전지라인) 투자",dr:"기계장치",cr:"미지급금",auto:false,base:[100000000,800000000],desc:"전지 생산라인 투자",w:1},
+      {key:"depr",label:"감가상각",dr:"감가상각비",cr:"감가상각누계액",auto:true,base:[30000000,250000000],desc:"설비 감가상각",w:2},
+    ],
+    planted:[
+      {postDate:"2026-06-30",dt:new Date(2026,5,30,23,30),preparer:"정CFO",approver:"정CFO",type:"수동",dr:"매출채권",cr:"수출매출",amount:600000000,desc:"기말 수출 매출 조기 계상(선적 미완료)"},
+      {postDate:"2026-05-25",dt:new Date(2026,5,15,16,0),preparer:"박부장",approver:"박부장",type:"수동",dr:"매출채권",cr:"수출매출",amount:350000000,desc:"수출 매출 소급 계상"},
+      {postDate:"2026-06-27",dt:new Date(2026,5,27,20,10),preparer:"박부장",approver:"정CFO",type:"수동",dr:"매출채권",cr:"수출매출",amount:150000000,desc:"환율 재적용 매출 조정"},
+      {postDate:"2026-06-28",dt:new Date(2026,5,28,21,0),preparer:"박부장",approver:"박부장",type:"수동",dr:"매출채권",cr:"내수매출",amount:120000000,desc:"기말 내수 매출 밀어내기"},
+    ],
+    filler:{dr:"지급수수료",cr:"미지급금"},
+  },
 };
 // 전체 계정→유형 병합 맵 (위험 규칙에서 사용)
 const ACC = Object.assign({}, ...Object.values(INDUSTRIES).map(i=>i.accounts));
@@ -398,6 +421,8 @@ function genSample(industryKey, txnKeys, normalCount, sizeKey, randomSeed){
   const seed = randomSeed ? ((Date.now() ^ (Math.random()*0xffffffff))>>>0) : 20260716;
   const rnd=mulberry32(seed); const out=[];
   const pick=a=>a[Math.floor(rnd()*a.length)];
+  // 거래 비중(w) 반영 가중 선택 — 예: 수출 매출을 내수보다 훨씬 자주 생성
+  const wpick=a=>{const tot=a.reduce((s,x)=>s+(x.w||1),0);let r=rnd()*tot;for(const x of a){r-=(x.w||1);if(r<=0)return x;}return a[a.length-1];};
   const bizTime=(dateStr)=>{const d=new Date(dateStr+"T00:00:00");d.setHours(9+Math.floor(rnd()*8),Math.floor(rnd()*60));return d;};
   // 선택된 거래만 (없으면 전체)
   let txns = (txnKeys && txnKeys.length) ? ind.txns.filter(t=>txnKeys.includes(t.key)) : ind.txns.slice();
@@ -408,7 +433,7 @@ function genSample(industryKey, txnKeys, normalCount, sizeKey, randomSeed){
     let d;
     do{const m=Math.floor(rnd()*6);const day=1+Math.floor(rnd()*28);d=new Date(2026,m,day);}
     while(d.getDay()===0||d.getDay()===6||HOLIDAYS.has(fmtDate(d)));
-    const t=pick(txns);
+    const t=wpick(txns);
     let amt=Math.round((t.base[0]+rnd()*(t.base[1]-t.base[0]))*scale/1000)*1000+Math.floor(rnd()*900)+50;
     const dt=bizTime(fmtDate(d));
     // 정상 전표: 금액이 요구하는 결재 단계에 맞는 결재권자가 승인 (규정 준수)
